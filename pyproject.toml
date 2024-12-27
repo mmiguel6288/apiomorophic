@@ -1,0 +1,18 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "apiomorphic"
+version = "0.1.0"
+authors = [
+{name = "Matt Miguel", email="mmiguel6288@gmail.com"},
+]
+description="Convert between LLM API formats"
+readme="README.md"
+requires-python = ">=3.10"
+dependencies=[]
+
+[project.urls]
+"Homepage"="https://github.com/mmiguel6288/apiomorphic"
+"Bug Tracker"="https://github.com/mmiguel6288/apiomorphic/issues"

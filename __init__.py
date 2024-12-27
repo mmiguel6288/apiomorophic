@@ -1,9 +1,15 @@
-import openai.types.chat as chat_types
 import re
 import json
 from copy import deepcopy
+from typing import Dict, List, Union, Optional, Any
 
-def translate(source,target):
+
+class FromBase:
+    pass
+class ToBase:
+    pass
+
+def translate(source : str,target : str) -> ToBase:
     match (source, target):
         case ('openai','anthropic'):
             return FromOpenAi.ToAnthropic
@@ -12,10 +18,10 @@ def translate(source,target):
         case _:
             raise Exception(f'Invalid (source,target) pair: ({source},{target})')
 
-class FromAnthropic:
-    class ToOpenAi:
+class FromAnthropic(FromBase):
+    class ToOpenAi(ToBase):
         @staticmethod
-        def convert_tool_schema(tool_schema_entry, strict = False):
+        def convert_tool_schema(tool_schema_entry : Dict[str, Any], strict : bool = False):
             #anthropic
             # {
             #     ... ,
@@ -61,8 +67,9 @@ class FromAnthropic:
             else:
                 result['function']['parameters'] = {'type':'object','properties':{}}
             return result
+
         @classmethod
-        def convert_message(klass,msg,image_detail='auto'):
+        def convert_message(cls,msg : Dict[str,Any] ,image_detail : str ='auto') -> Dict[str,Any]:
             #https://platform.openai.com/docs/api-reference/chat/create
             #https://docs.anthropic.com/en/api/messages
             output_messages = []
@@ -113,7 +120,7 @@ class FromAnthropic:
                                 case _:
                                     breakpoint()
                     else:
-                        output_messages.append(msg)
+                        output_messages.append(deepcopy(msg))
                 case 'user':
                     if 'content' in msg and isinstance(msg['content'],list):
                         new_msg = None
@@ -192,31 +199,24 @@ class FromAnthropic:
                         if new_msg is not None:
                             output_messages.append(new_msg)
                     else:
-                        output_messages.append(msg)
+                        output_messages.append(deepcopy(msg))
                 case _:
-                    output_messages.append(msg)
+                    output_messages.append(deepcopy(msg))
             return output_messages
         @classmethod
-        def convert(klass,api_params):
+        def convert(cls,api_params : Dict[str,Any]) -> Dict[str, Any]:
             new_params = deepcopy(api_params)
             messages = []
             for msg in new_params['messages']:
-                messages.extend(klass.convert_message(msg))
+                messages.extend(cls.convert_message(msg))
             new_params['messages'] = messages
             return new_params
 
-
-        
-
-
-
-
-
-class FromOpenAi:
-    class ToAnthropic:
+class FromOpenAi(FromBase):
+    class ToAnthropic(ToBase):
 
         @staticmethod
-        def convert_tool_schema(tool_schema_entry):
+        def convert_tool_schema(tool_schema_entry : Dict[str,Any]) -> Dict[str,Any]:
             #openai:
             # {
             #     ... ,
@@ -263,7 +263,7 @@ class FromOpenAi:
 
 
         @staticmethod
-        def convert_vision(msg):
+        def convert_vision(msg : Dict[str, Any]) -> Dict[str,Any]:
             # openai:
             # {
             #     "type": "image_url",
@@ -305,7 +305,7 @@ class FromOpenAi:
 
 
         @classmethod
-        def convert_message(klass,msg):
+        def convert_message(cls,msg : Dict[str,Any]) -> Dict[str,Any]:
             #https://platform.openai.com/docs/api-reference/chat/create
             #https://docs.anthropic.com/en/api/messages
             output_messages = []
@@ -378,12 +378,12 @@ class FromOpenAi:
                 case 'system':
                     output_messages.append(msg)
                 case 'user':
-                    output_messages.append(klass.convert_vision(msg))
+                    output_messages.append(cls.convert_vision(msg))
             return output_messages
 
 
         @classmethod
-        def convert(klass,api_params):
+        def convert(cls,api_params : Dict[str,Any]) -> Dict[str,Any]:
             new_params = deepcopy(api_params)
             # misc params
             n = new_params.get('n')
@@ -391,8 +391,8 @@ class FromOpenAi:
                 raise Exception('Anthropic API only supports n=1')
             if 'stream' in new_params:
                 del new_params['stream']
-            if 'max_tokens' not in new_params:
-                new_params['max_tokens'] = 1024
+            # if 'max_tokens' not in new_params:
+            #     new_params['max_tokens'] = 1024
 
             #separate system messages
             messages = new_params['messages']
@@ -406,7 +406,7 @@ class FromOpenAi:
                     else:
                         system_messages.append(msg['content'])
                 else:
-                    other_messages.extend(klass.convert_message(msg))
+                    other_messages.extend(cls.convert_message(msg))
             system_message = '\n'.join(system_messages).strip() if system_messages else ''
             new_params['messages'] = other_messages
             if len(system_message) > 0:
@@ -415,5 +415,5 @@ class FromOpenAi:
 
             #convert tool schema
             if 'tools' in new_params:
-                new_params['tools'] = [klass.convert_tool_schema(tool_schema_entry) for tool_schema_entry in new_params['tools']]
+                new_params['tools'] = [cls.convert_tool_schema(tool_schema_entry) for tool_schema_entry in new_params['tools']]
             return new_params
