@@ -45,3 +45,6 @@ testpaths = [
 pythonpath = [
     "src"
 ]
+markers = [
+"integration: marks test as integration tests"
+]

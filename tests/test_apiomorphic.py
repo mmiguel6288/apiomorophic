@@ -1,39 +1,48 @@
 # test_apiomorphic.py
 import pytest
 import base64
+import json
+from typing import Dict, Any
 from apiomorphic import translate, FromOpenAi, FromAnthropic
 
-# Test data
-SAMPLE_BASE64_IMAGE = base64.b64encode(b"fake_image_data").decode('utf-8')
+# Fixtures
+@pytest.fixture
+def sample_base64_image():
+    return base64.b64encode(b"fake_image_data").decode('utf-8')
 
+@pytest.fixture
+def basic_messages():
+    return {
+        "openai": {
+            "messages": [
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": "Hello!"},
+                {"role": "assistant", "content": "Hi there!"}
+            ],
+            "max_tokens": 100
+        },
+        "anthropic": {
+            "messages": [
+                {"role": "user", "content": "Hello!"},
+                {"role": "assistant", "content": "Hi there!"}
+            ],
+            "system": "You are a helpful assistant.",
+            "max_tokens": 100
+        }
+    }
+
+# Basic Translation Tests
 def test_translate_function():
     assert translate('openai', 'anthropic') == FromOpenAi.ToAnthropic
     assert translate('anthropic', 'openai') == FromAnthropic.ToOpenAi
     with pytest.raises(Exception):
         translate('invalid', 'format')
 
-def test_basic_message_conversion_openai_to_anthropic():
-    openai_messages = {
-        "messages": [
-            {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": "Hello!"},
-            {"role": "assistant", "content": "Hi there!"}
-        ],
-        "max_tokens": 100
-    }
-    
-    expected_anthropic = {
-        "messages": [
-            {"role": "user", "content": "Hello!"},
-            {"role": "assistant", "content": "Hi there!"}
-        ],
-        "system": "You are a helpful assistant.",
-        "max_tokens": 100
-    }
-    
+# Message Conversion Tests
+def test_basic_message_conversion_openai_to_anthropic(basic_messages):
     converter = translate('openai', 'anthropic')
-    result = converter.convert(openai_messages)
-    assert result == expected_anthropic
+    result = converter.convert(basic_messages['openai'])
+    assert result == basic_messages['anthropic']
 
 def test_tool_conversion_openai_to_anthropic():
     openai_tool_msg = {
@@ -70,7 +79,7 @@ def test_tool_conversion_openai_to_anthropic():
     result = converter.convert(openai_tool_msg)
     assert result == expected_anthropic
 
-def test_image_conversion_anthropic_to_openai():
+def test_image_conversion_anthropic_to_openai(sample_base64_image):
     anthropic_msg = {
         "role": "user",
         "content": [
@@ -79,7 +88,7 @@ def test_image_conversion_anthropic_to_openai():
                 "source": {
                     "type": "base64",
                     "media_type": "image/jpeg",
-                    "data": SAMPLE_BASE64_IMAGE
+                    "data": sample_base64_image
                 }
             },
             {
@@ -95,7 +104,7 @@ def test_image_conversion_anthropic_to_openai():
             {
                 "type": "image_url",
                 "image_url": {
-                    "url": f"data:image/jpeg;base64,{SAMPLE_BASE64_IMAGE}",
+                    "url": f"data:image/jpeg;base64,{sample_base64_image}",
                     "detail": "auto"
                 }
             },
@@ -110,6 +119,7 @@ def test_image_conversion_anthropic_to_openai():
     result = converter.convert_message(anthropic_msg)
     assert result[0] == expected_openai
 
+# Tool Schema Tests
 def test_tool_schema_conversion():
     openai_schema = {
         "type": "function",
@@ -140,6 +150,26 @@ def test_tool_schema_conversion():
     result = converter.convert_tool_schema(openai_schema)
     assert result == expected_anthropic
 
+def test_empty_tool_schema():
+    openai_schema = {
+        "type": "function",
+        "function": {
+            "name": "empty_tool"
+        }
+    }
+    
+    expected_anthropic = {
+        "name": "empty_tool",
+        "input_schema": {
+            "type": "object",
+            "properties": {}
+        }
+    }
+    
+    converter = FromOpenAi.ToAnthropic
+    result = converter.convert_tool_schema(openai_schema)
+    assert result == expected_anthropic
+
 def test_tool_response_conversion_openai_to_anthropic():
     openai_response = {
         "role": "tool",
@@ -160,22 +190,83 @@ def test_tool_response_conversion_openai_to_anthropic():
     result = converter.convert_message(openai_response)[0]
     assert result == expected_anthropic
 
-def test_empty_tool_schema():
-    openai_schema = {
-        "type": "function",
-        "function": {
-            "name": "empty_tool"
-        }
+# Complex Message Tests
+def test_nested_tool_calls():
+    nested_msg = {
+        "messages": [
+            {
+                "role": "assistant",
+                "tool_calls": [
+                    {
+                        "id": "call_1",
+                        "type": "function",
+                        "function": {
+                            "name": "func1",
+                            "arguments": json.dumps({"arg1": "val1"})
+                        }
+                    },
+                    {
+                        "id": "call_2",
+                        "type": "function",
+                        "function": {
+                            "name": "func2",
+                            "arguments": json.dumps({"arg2": "val2"})
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+    converter = translate('openai', 'anthropic')
+    result = converter.convert(nested_msg)
+    assert len(result["messages"]) == 2
+    assert all(msg["role"] == "assistant" for msg in result["messages"])
+
+# Error Cases
+def test_invalid_message_format():
+    invalid_msg = {"role": "invalid", "content": "test"}
+    with pytest.raises(Exception):
+        converter = translate('invalid', 'anthropic')
+        converter.convert_message(invalid_msg)
+
+# Integration Tests
+@pytest.mark.integration
+def test_full_conversation_flow():
+    conversation = {
+        "messages": [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": "What's the weather?"},
+            {
+                "role": "assistant",
+                "tool_calls": [{
+                    "id": "weather_1",
+                    "type": "function",
+                    "function": {
+                        "name": "get_weather",
+                        "arguments": '{"location": "London"}'
+                    }
+                }]
+            },
+            {
+                "role": "tool",
+                "tool_call_id": "weather_1",
+                "content": "Sunny, 22°C"
+            },
+            {"role": "assistant", "content": "The weather in London is sunny and 22°C."}
+        ]
     }
     
-    expected_anthropic = {
-        "name": "empty_tool",
-        "input_schema": {
-            "type": "object",
-            "properties": {}
-        }
-    }
+    # Test both conversion directions
+    openai_to_anthropic = translate('openai', 'anthropic').convert(conversation)
+    anthropic_to_openai = translate('anthropic', 'openai').convert(openai_to_anthropic)
     
-    converter = FromOpenAi.ToAnthropic
-    result = converter.convert_tool_schema(openai_schema)
-    assert result == expected_anthropic
+    # Verify system message handling
+    assert "system" in openai_to_anthropic
+    assert openai_to_anthropic["system"] == "You are a helpful assistant."
+    
+    # Verify tool calls conversion
+    assert any("tool_use" in str(msg.get("content")) for msg in openai_to_anthropic["messages"])
+    assert any("tool_calls" in str(msg) for msg in anthropic_to_openai["messages"])
+
+if __name__ == "__main__":
+    pytest.main([__file__])

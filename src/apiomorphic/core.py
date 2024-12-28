@@ -3,12 +3,25 @@ import json
 from copy import deepcopy
 from typing import Dict, List, Union, Optional, Any
 
+
 class FromBase:
     pass
 class ToBase:
     pass
 
 def translate(source : str,target : str) -> ToBase:
+    """Translate between API formats.
+    
+    Args:
+        source: Source API format ('openai' or 'anthropic')
+        target: Target API format ('openai' or 'anthropic')
+        
+    Returns:
+        ToBase: Appropriate converter class
+        
+    Raises:
+        Exception: If invalid source/target pair
+    """
     match (source, target):
         case ('openai','anthropic'):
             return FromOpenAi.ToAnthropic
