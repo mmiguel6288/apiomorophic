@@ -13,6 +13,35 @@ readme="README.md"
 requires-python = ">=3.10"
 dependencies=[]
 
+[project.optional-dependencies]
+test = [
+  "pytest >=6",
+  "pytest-cov >=3",
+]
+dev = [
+  "pytest >=6",
+  "pytest-cov >=3",
+]
+
 [project.urls]
 "Homepage"="https://github.com/mmiguel6288/apiomorphic"
 "Bug Tracker"="https://github.com/mmiguel6288/apiomorphic/issues"
+
+[tool.hatch.envs.default]
+features = ["test"]
+scripts.test = "pytest {args}"
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = ["-ra", "--showlocals", "--strict-markers", "--strict-config"]
+xfail_strict = true
+filterwarnings = [
+  "error",
+]
+log_cli_level = "INFO"
+testpaths = [
+  "tests",
+]
+pythonpath = [
+    "src"
+]

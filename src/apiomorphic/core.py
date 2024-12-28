@@ -3,7 +3,6 @@ import json
 from copy import deepcopy
 from typing import Dict, List, Union, Optional, Any
 
-
 class FromBase:
     pass
 class ToBase:
