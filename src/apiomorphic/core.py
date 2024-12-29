@@ -20,7 +20,7 @@ def translate(source : str,target : str) -> ToBase:
         ToBase: Appropriate converter class
         
     Raises:
-        Exception: If invalid source/target pair
+        ValueError: If invalid source/target pair
     """
     match (source, target):
         case ('openai','anthropic'):
@@ -28,7 +28,7 @@ def translate(source : str,target : str) -> ToBase:
         case ('anthropic','openai'):
             return FromAnthropic.ToOpenAi
         case _:
-            raise Exception(f'Invalid (source,target) pair: ({source},{target})')
+            raise ValueError(f'Invalid (source,target) pair: ({source},{target})')
 
 class FromAnthropic(FromBase):
     class ToOpenAi(ToBase):
