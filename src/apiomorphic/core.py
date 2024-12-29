@@ -1,13 +1,16 @@
 import re
 import json
 from copy import deepcopy
-from typing import Dict, List, Union, Optional, Any
+from typing import Dict, List, Union, Optional, Any, Literal, Tuple
 
 
 class FromBase:
     pass
+
 class ToBase:
     pass
+
+ApiFormat = Literal['openai', 'anthropic']
 
 def translate(source : str,target : str) -> ToBase:
     """Translate between API formats.
@@ -429,3 +432,57 @@ class FromOpenAi(FromBase):
             if 'tools' in new_params:
                 new_params['tools'] = [cls.convert_tool_schema(tool_schema_entry) for tool_schema_entry in new_params['tools']]
             return new_params
+
+def format_tool_schema(api_format: ApiFormat, tools: List[Tuple[str,str,Dict[str,Any]]], strict: Optional[bool] = False) -> Dict[str,Any]:
+    """Converts (name, description, parameters) tool descriptions into api-specific formats"""
+    match api_format:
+        case "anthropic":
+            #anthropic
+            # {
+            #     ... ,
+            #     'tools':[
+            #         {
+            #             'name': name,
+            #             'description': description,
+            #             'input_schema': json_schema,
+            #         },
+            #         ... ,
+            #         ],
+            # }
+            return [
+                    {'name':name,'description':description,'input_schema':parameters}
+                for name, description, parameters in tools
+                ]
+
+        case "openai":
+            #openai:
+            # {
+            #     ... ,
+            #     'tools':[
+            #         {
+            #             'type':'function',
+            #             'function':{
+            #                 'description': description,
+            #                 'name': name,
+            #                 'parameters':json_schema,
+            #                 'strict': boolean_strict_schema_adherence,
+            #                 },
+            #         },
+            #         ... ,
+            #       ]
+            #     }
+            # }
+            return [
+                    {'type':'function','function':{
+                        'name':name,
+                        'description':description,
+                        'parameters':parameters,
+                        'strict': strict,
+                        }}
+                for name, description, parameters in tools
+                ]
+        case _:
+            raise ValueError(f'Invalid api_format {api_format}')
+
+
+

@@ -3,7 +3,7 @@ import pytest
 import base64
 import json
 from typing import Dict, Any
-from apiomorphic import translate, FromOpenAi, FromAnthropic
+from apiomorphic import translate, FromOpenAi, FromAnthropic, format_tool_schema
 
 # Fixtures
 @pytest.fixture
@@ -267,6 +267,105 @@ def test_full_conversation_flow():
     # Verify tool calls conversion
     assert any("tool_use" in str(msg.get("content")) for msg in openai_to_anthropic["messages"])
     assert any("tool_calls" in str(msg) for msg in anthropic_to_openai["messages"])
+
+def test_format_tool_schema():
+    # Example tool data
+    tools = [
+        (
+            "math.add",
+            "Add two numbers together",
+            {
+                "type": "object",
+                "properties": {
+                    "a": {"type": "number"},
+                    "b": {"type": "number"}
+                },
+                "required": ["a", "b"]
+            }
+        ),
+        (
+            "text.uppercase",
+            "Convert text to uppercase",
+            {
+                "type": "object",
+                "properties": {
+                    "text": {"type": "string"}
+                },
+                "required": ["text"]
+            }
+        )
+    ]
+
+    # Test OpenAI format
+    openai_result = format_tool_schema("openai", tools, strict=True)
+    assert openai_result == [
+        {
+            "type": "function",
+            "function": {
+                "name": "math.add",
+                "description": "Add two numbers together",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "a": {"type": "number"},
+                        "b": {"type": "number"}
+                    },
+                    "required": ["a", "b"]
+                },
+                "strict": True
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "text.uppercase",
+                "description": "Convert text to uppercase",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "text": {"type": "string"}
+                    },
+                    "required": ["text"]
+                },
+                "strict": True
+            }
+        }
+    ]
+
+    # Test Anthropic format
+    anthropic_result = format_tool_schema("anthropic", tools)
+    assert anthropic_result == [
+        {
+            "name": "math.add",
+            "description": "Add two numbers together",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "a": {"type": "number"},
+                    "b": {"type": "number"}
+                },
+                "required": ["a", "b"]
+            }
+        },
+        {
+            "name": "text.uppercase",
+            "description": "Convert text to uppercase",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "text": {"type": "string"}
+                },
+                "required": ["text"]
+            }
+        }
+    ]
+
+    # Test invalid format
+    try:
+        format_tool_schema("invalid", tools)
+        assert False, "Should have raised ValueError"
+    except ValueError:
+        pass
 
 if __name__ == "__main__":
     pytest.main([__file__])
